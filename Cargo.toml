@@ -1,0 +1,17 @@
+[package]
+name = "navigation_rust"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+angle = "0.5.0"
+
+[[bin]]
+name = "sim_server"
+path = "src/sim_communication/server.rs"
+
+[[bin]]
+name = "sim_client"
+path = "src/sim_communication/client.rs"
