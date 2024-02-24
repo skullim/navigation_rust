@@ -7,14 +7,14 @@ use std::ops::Sub;
 
 pub trait SpatialPositionTag {}
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum AngleWrapping
 {
     PlusMinusPi,
     TwoPi
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Angle
 {
     angle: angle::Rad<f32>,
@@ -81,7 +81,7 @@ pub struct Point {
     pub y: f32
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Pose {
     pub x: f32,
     pub y: f32,

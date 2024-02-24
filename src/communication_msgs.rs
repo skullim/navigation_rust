@@ -1,6 +1,6 @@
 use crate::geometry::Pose;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LocalizationMsg
 {
    pub pose: Pose,
@@ -29,4 +29,9 @@ pub struct ControlBicycleMsg
 }
 pub struct ControlDifferentialMsg
 {
+}
+
+pub struct OutputData<T: SupportedControlTrait>
+{
+    pub ctrl_msg: T
 }

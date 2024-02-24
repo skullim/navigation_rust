@@ -1,12 +1,11 @@
-use std::borrow::Borrow;
-use std::borrow::BorrowMut;
-use std::collections::HashMap;
+use std::sync::mpsc::{channel, Sender};
+use std::thread;
 
 use crate::communication_msgs::LocalizationMsg;
 use crate::communication_msgs::ImuMsg;
-use crate::communication_msgs::SupportedControlTrait;
 
 ///Once the Storage is created the object might still not be created and therefore the type is wrapped into Option
+#[derive(Clone)]
 pub struct Storage<T>(Option<T>);
 
 impl<T> Storage<T> {
@@ -34,44 +33,12 @@ pub enum ProtocolType
     TCP
 }
 
+#[derive(Debug)]
 pub struct MsgWithMeta
 {
     pub protocol: ProtocolType,
     pub msg_type: InputMsgType,
     pub payload: String //todo change to &str if feasible
-}
-
-// pub trait DataTypeConverter {
-//     fn convert(&self, input : MsgWithMeta) -> ConvertedMsg;
-// }
-
-// pub enum ConvertedMsg
-// {
-//     Localization(LocalizationMsg)
-// }
-
-// pub struct MsgReceiver
-// {
-//     converters_map : HashMap<(ProtocolType, InputMsgType), Box<dyn DataTypeConverter>>
-// }
-
-// impl MsgReceiver
-// {
-//     pub fn receive(&self, msg_with_meta: MsgWithMeta)
-//     {
-//         let key = (msg_with_meta.protocol, msg_with_meta.msg_type);
-//         match self.converters_map.get(&key) {
-//             Some(converter) => {
-//                 let value = converter.convert(msg_with_meta);
-//             }
-//             None => {print!("Converter not found!")}
-//         }
-//     }
-// }
-
-pub struct OutputData<T: SupportedControlTrait>
-{
-    pub ctrl_msg: T
 }
 
 ///@todo Adrian error handling -> Result<T>
@@ -105,14 +72,20 @@ pub trait Subscribe<T>
     fn subscribe(&mut self, message: &T);
 }
 
-pub struct SubscriberRegistry<T>
+pub struct SubscriberRegistry<'a, T>
 {
-    subscribers : Vec<Box<dyn Subscribe<T>>>
+    subscribers :  Vec<&'a mut dyn Subscribe<T>>,
 }
 
-impl <T> SubscriberRegistry<T>
+impl <'a, T> SubscriberRegistry<'a, T>
 {
-    pub fn register(&mut self, subscriber: Box<dyn Subscribe<T>>)
+
+    pub fn new() -> Self
+    {
+        Self{subscribers: Vec::new()}
+    }
+
+    pub fn register(&mut self, subscriber: &'a mut dyn Subscribe<T>)
     {
         self.subscribers.push(subscriber);
     }
@@ -126,13 +99,13 @@ impl <T> SubscriberRegistry<T>
     }
 }
 
-pub struct LocMsgPublisher
+pub struct LocMsgPublisher<'a>
 {
     adapter : Box<dyn AdaptToLocMsg>,
-    subscriber_registry : SubscriberRegistry<LocalizationMsg>
+    subscriber_registry : SubscriberRegistry<'a, LocalizationMsg>
 }
 
-impl Publish<MsgWithMeta> for LocMsgPublisher
+impl<'a> Publish<MsgWithMeta> for LocMsgPublisher<'a>
 {
     fn publish(&mut self, input: MsgWithMeta) {
         let adapted_msg = self.adapter.adapt(input);
@@ -140,11 +113,42 @@ impl Publish<MsgWithMeta> for LocMsgPublisher
     }
 }
 
-impl LocMsgPublisher
+impl<'a> LocMsgPublisher<'a>
 {
-    pub fn register(&mut self, subscriber: Box<dyn Subscribe<LocalizationMsg>>)
+    pub fn new(adapter: Box<dyn AdaptToLocMsg>) -> Self
+    {
+        Self {adapter, subscriber_registry: SubscriberRegistry::<'a, LocalizationMsg>::new()}
+    }
+
+    pub fn register(&mut self, subscriber: &'a mut dyn Subscribe<LocalizationMsg>)
     {
         self.subscriber_registry.register(subscriber);
+    }
+}
+
+pub struct CommunicationHandler
+{
+    sender: Sender<MsgWithMeta>,
+    publishers: Vec<Box<dyn Publish<MsgWithMeta>>>,
+}
+
+impl CommunicationHandler
+{
+    pub fn new() -> Self
+    {
+        let (sender, receiver) = channel();
+        thread::spawn(move || {for new_msg in receiver {println!("Received {:?}", new_msg)}});
+        Self{sender, publishers: Vec::new()}
+    }
+
+    pub fn register_publisher(&mut self, publisher: Box<dyn Publish<MsgWithMeta>>)
+    {
+        self.publishers.push(publisher);
+    }
+
+    pub fn get_new_sender(&self) -> Sender<MsgWithMeta>
+    {
+        self.sender.clone()
     }
 }
 
@@ -158,26 +162,11 @@ mod tests {
     use super::*;
 
     #[derive(Clone)]
-    pub struct DummyMsg
-    {
-        val : i32
-    }
-
     pub struct MyStorage
     {
-        pub dummy_msg : Storage<DummyMsg>,
         pub imu_msg : Storage<ImuMsg>,
         pub localization_msg : Storage<LocalizationMsg>,
 
-    }
-
-    impl Subscribe<DummyMsg> for MyStorage
-    {
-        fn subscribe(&mut self, message : &DummyMsg)
-        {
-            println!("Received new Dummy msg");
-            self.dummy_msg.set(message.clone())
-        }
     }
 
     impl Subscribe<ImuMsg> for MyStorage
@@ -198,21 +187,51 @@ mod tests {
         }
     }
 
+    pub struct FakeAdapter
+    {
+
+    }
+
+    impl AdaptToLocMsg for FakeAdapter
+    {
+        fn adapt(&self, from: MsgWithMeta) -> LocalizationMsg {
+            LocalizationMsg{pose: Pose{ x: 2.0, y: 5.0, theta: Angle::new(1.0, crate::geometry::AngleWrapping::PlusMinusPi) }}
+        }
+    }
+
+    pub struct NavigationComponent
+    {
+    }
+
+    impl NavigationComponent
+    {
+        pub fn tick(&self, storage_view : MyStorage)
+        {
+            let loc_msg = storage_view.localization_msg;
+            let imu_msg = storage_view.imu_msg;
+        }
+    }
+
+
+
     #[test]
     fn test_multi_subscriber() {
 
+        let nav_component = NavigationComponent{};
 
+        let mut my_storage = Box::new(MyStorage{imu_msg:Storage(None), localization_msg:Storage(None)});
+        let fake_adapter = Box::new(FakeAdapter{});
+        let mut loc_msg_pub = LocMsgPublisher::new(fake_adapter);
 
-        let mut my_storage = MyStorage{dummy_msg:Storage(None), imu_msg:Storage(None), localization_msg:Storage(None)};
+        nav_component.tick((*my_storage).clone());
 
-        let loc_msg = LocalizationMsg{pose: Pose{ x: 2.0, y: 5.0, theta: Angle::new(1.0, crate::geometry::AngleWrapping::PlusMinusPi) }};
-        let imu_msg = ImuMsg{};
-        let dummy_msg = DummyMsg{val:10};
+        loc_msg_pub.register(&mut*my_storage);
+        loc_msg_pub.publish(MsgWithMeta {
+            protocol: ProtocolType::MQTT,
+            msg_type: InputMsgType::Localization,
+            payload: "Hello".to_string(),
+        });
 
-        my_storage.subscribe(&imu_msg);
-        my_storage.subscribe(&dummy_msg);
-
-
-        
+        nav_component.tick(*my_storage);
     }
 }

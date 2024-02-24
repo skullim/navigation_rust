@@ -1,5 +1,5 @@
 use std::net::{TcpListener, TcpStream};
-use std::io::{Read, Write};
+use std::io::Read;
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").expect("Failed to bind");
