@@ -1,5 +1,5 @@
-use std::net::{TcpListener, TcpStream};
 use std::io::Read;
+use std::net::{TcpListener, TcpStream};
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").expect("Failed to bind");
@@ -21,18 +21,19 @@ fn main() {
 }
 
 fn handle_client(stream: &mut TcpStream) {
-    
     loop {
         let mut buffer = [0; 1024];
         match stream.read(&mut buffer) {
-            
             Ok(bytes_read) => {
                 if bytes_read == 0 {
                     // Connection closed by client
-                    println!("Connection closed by client: {}", stream.peer_addr().unwrap());
+                    println!(
+                        "Connection closed by client: {}",
+                        stream.peer_addr().unwrap()
+                    );
                     break;
                 }
-                
+
                 // Process received data
                 let pose_data = String::from_utf8_lossy(&buffer[..bytes_read]);
                 println!("Received pose data: {}", pose_data);

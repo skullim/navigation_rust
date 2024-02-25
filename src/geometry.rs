@@ -4,44 +4,41 @@ use angle::Rad;
 use std::ops::Add;
 use std::ops::Sub;
 
-
 pub trait SpatialPositionTag {}
 
 #[derive(Clone, Debug)]
-pub enum AngleWrapping
-{
+pub enum AngleWrapping {
     PlusMinusPi,
-    TwoPi
+    TwoPi,
 }
 
 #[derive(Clone, Debug)]
-pub struct Angle
-{
+pub struct Angle {
     angle: angle::Rad<f32>,
     wrapping: AngleWrapping,
 }
 
 impl Angle {
-
-    pub fn new(angle: f32, wrapping: AngleWrapping) -> Self
-    {
+    pub fn new(angle: f32, wrapping: AngleWrapping) -> Self {
         Self::wrap(angle, wrapping)
     }
 
     ///@todo: maybe use WrappingStrategy with wrap trait instead?
-    fn wrap(angle: f32, wrapping: AngleWrapping) -> Self
-    {
+    fn wrap(angle: f32, wrapping: AngleWrapping) -> Self {
         let mut angle = angle::Rad(angle).wrap();
 
         if let AngleWrapping::TwoPi = wrapping {
-           return Self{angle, wrapping};
+            return Self { angle, wrapping };
         }
 
         let pi = Rad::<f32>::pi();
-        if  angle > pi {
-            angle -=  Rad::<f32>::two_pi();
+        if angle > pi {
+            angle -= Rad::<f32>::two_pi();
         }
-        Self{angle, wrapping: AngleWrapping::PlusMinusPi}
+        Self {
+            angle,
+            wrapping: AngleWrapping::PlusMinusPi,
+        }
     }
 
     fn value(self) -> f32 {
@@ -49,11 +46,11 @@ impl Angle {
     }
 
     fn sin(self) -> f32 {
-    	self.angle.value().sin()
+        self.angle.value().sin()
     }
 
     fn cos(self) -> f32 {
-    	self.angle.value().cos()
+        self.angle.value().cos()
     }
 }
 
@@ -75,24 +72,23 @@ impl Sub for Angle {
     }
 }
 
-
 pub struct Point {
     pub x: f32,
-    pub y: f32
+    pub y: f32,
 }
 
 #[derive(Clone, Debug)]
 pub struct Pose {
     pub x: f32,
     pub y: f32,
-    pub theta: Angle
+    pub theta: Angle,
 }
 
 pub struct G1Pose {
     pub x: f32,
     pub y: f32,
     pub theta: Angle,
-    pub kappa: f32
+    pub kappa: f32,
 }
 
 impl SpatialPositionTag for Point {}
